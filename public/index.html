@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Schemavisare</title>
+    <link rel="stylesheet" href="css.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+</head>
+<body>
+    <h1>Schemavisare</h1>
+
+    <!-- "Hur gör man?" Button -->
+    <button id="helpButton">Hur gör man?</button>
+
+    <!-- Help Modal -->
+    <div id="helpModal" class="modal">
+        <div class="modal-content">
+            <span class="close-button">&times;</span>
+            <h2>Hur fungerar Schemavisaren?</h2>
+            <p>
+                1. Klicka på "Ladda upp schema" och välj två PDF-filer: en för jämna veckor och en för udda veckor.<br>
+                2. Om filerna är korrekta kommer schemat att sparas i systemet.<br>
+                3. För att visa ett schema, skriv in klassnamnet eller det fullständiga elevnamnet i fältet och tryck "Visa schema".<br>
+                4. Båda schemana visas direkt på skärmen.<br>
+                5. Om du inte hittar schemat, kontrollera att du angivit rätt klass eller elevnamn.
+            </p>
+            <p>Om du föredrar en videoguide kan du titta på denna:
+            <a href="https://www.youtube.com/watch?v=wGdtHnSSvEU" target="_blank">Videoguide</a>
+        </p>
+            <br>
+            <br>
+                <b>OBS! Klassnamn och elevnamn måste matcha exakt som det står i schemat. </b>
+        </div>
+    </div>
+
+    <!-- Upload Form -->
+    <form id="uploadForm" enctype="multipart/form-data">
+        <label>Schema för jämna veckor:</label>
+        <input type="file" id="pdfEven" name="fileEven" accept=".pdf">
+        <label>Schema för udda veckor:</label>
+        <input type="file" id="pdfOdd" name="fileOdd" accept=".pdf">
+        <button type="submit">Ladda upp schema</button>
+    </form>
+
+    <hr>
+
+    <!-- View Form -->
+    <form id="viewForm">
+        <input type="text" id="fileName" placeholder="Klass eller fulla elevnamn">
+        <button type="submit">Visa schema</button>
+    </form>
+
+    <!-- PDF Viewer -->
+    <div id="pdfViewer"></div>
+
+    <script>
+        // Handle "Hur gör man?" Modal
+        const helpButton = document.getElementById("helpButton");
+        const helpModal = document.getElementById("helpModal");
+        const closeButton = document.querySelector(".close-button");
+
+        helpButton.addEventListener("click", () => {
+            helpModal.style.display = "block";
+        });
+
+        closeButton.addEventListener("click", () => {
+            helpModal.style.display = "none";
+        });
+
+        window.addEventListener("click", (event) => {
+            if (event.target === helpModal) {
+                helpModal.style.display = "none";
+            }
+        });
+
+        // Handle PDF Upload
+        document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const pdfEven = document.getElementById('pdfEven').files[0];
+            const pdfOdd = document.getElementById('pdfOdd').files[0];
+
+            if (!pdfEven || !pdfOdd) {
+                alert('Var vänlig och välj två filer.');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('fileEven', pdfEven);
+            formData.append('fileOdd', pdfOdd);
+
+            try {
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData,
+                });
+
+                const message = await response.text();
+                alert(message);
+            } catch (error) {
+                console.error('Error uploading files:', error);
+            }
+        });
+
+        // Remove underscores from input display but handle them in submission
+        document.getElementById('fileName').addEventListener('input', (e) => {
+            const input = e.target;
+            const cleanValue = input.value.replace(/_/g, ''); // Remove existing underscores
+            input.value = cleanValue; // Update the display without underscores
+        });
+
+        // Render PDFs on Page
+        async function renderPDF(url, container) {
+            const loadingTask = pdfjsLib.getDocument(url);
+            const pdf = await loadingTask.promise;
+
+            for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+                const page = await pdf.getPage(pageNum);
+
+                const canvas = document.createElement('canvas');
+                const context = canvas.getContext('2d');
+
+                const viewport = page.getViewport({ scale: 1.5 });
+                canvas.width = viewport.width;
+                canvas.height = viewport.height;
+
+                await page.render({
+                    canvasContext: context,
+                    viewport: viewport,
+                }).promise;
+
+                container.appendChild(canvas);
+            }
+        }
+
+        // Handle View Request
+        document.getElementById('viewForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const fileName = document.getElementById('fileName').value.trim().toLowerCase();
+            if (!fileName) {
+                alert("Var vänlig och välj en klass eller elev");
+                return;
+            }
+
+            const sanitizedFileName = fileName.replace(/\s+/g, '_');
+            const evenFileUrl = `/uploads/${sanitizedFileName}_even.pdf`;
+            const oddFileUrl = `/uploads/${sanitizedFileName}_odd.pdf`;
+
+            const pdfViewer = document.getElementById('pdfViewer');
+            pdfViewer.innerHTML = ''; // Clear previous content
+
+            try {
+                const evenContainer = document.createElement('div');
+                evenContainer.innerHTML = '<h2>Schema för jämna veckor</h2>';
+                pdfViewer.appendChild(evenContainer);
+                await renderPDF(evenFileUrl, evenContainer);
+
+                const oddContainer = document.createElement('div');
+                oddContainer.innerHTML = '<h2>Schema för udda veckor</h2>';
+                pdfViewer.appendChild(oddContainer);
+                await renderPDF(oddFileUrl, oddContainer);
+            } catch (error) {
+                console.error('Error rendering PDFs:', error);
+                alert('Fel namn eller så finns de inte i databasen');
+            }
+        });
+    </script>
+</body>
+</html>
