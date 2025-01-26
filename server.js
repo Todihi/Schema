@@ -5,7 +5,7 @@ const path = require("path");
 const pdfParse = require("pdf-parse");
 
 const app = express();
-const port = 25565;
+const port = process.env.PORT || 4000;
 
 // Set up storage for multer
 const storage = multer.diskStorage({
